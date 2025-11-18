@@ -338,6 +338,14 @@ router.post('/refresh-team-prs', async (req, res) => {
             }
         }
 
+        const {data, error} = supabaseClient.from('teams')
+        .update({ last_sync: new Date().toISOString() })
+        .eq('id', team_id);
+
+        if (error) {
+            console.error(`Failed to update last_sync for team ${team.name}:`, error);
+        }
+
         return res.status(200).json({ 
             success: true, 
             message: `Team '${team.name}' PR refresh completed. ${successCount} succeeded, ${failureCount} failed.`,
