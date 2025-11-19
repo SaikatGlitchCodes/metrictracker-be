@@ -9,9 +9,9 @@ router.post('/refresh-prs', async (req, res) => {
 
     // Input validation
     if (!github_name) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'github_name is required' 
+        return res.status(400).json({
+            success: false,
+            message: 'github_name is required'
         });
     }
 
@@ -24,17 +24,17 @@ router.post('/refresh-prs', async (req, res) => {
             .single();
 
         if (userError || !user) {
-            return res.status(404).json({ 
-                success: false, 
+            return res.status(404).json({
+                success: false,
                 message: `User '${github_name}' not found`,
-                error: userError?.message 
+                error: userError?.message
             });
         }
 
         if (!user.github_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `User '${github_name}' does not have a valid github_id` 
+            return res.status(400).json({
+                success: false,
+                message: `User '${github_name}' does not have a valid github_id`
             });
         }
 
@@ -42,18 +42,18 @@ router.post('/refresh-prs', async (req, res) => {
         const { data: prData, error: prError } = await getPrs(user);
 
         if (prError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: `Failed to fetch PRs for ${github_name}`,
-                error: prError.message || prError 
+                error: prError.message || prError
             });
         }
 
         if (!prData || prData.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: `No PRs found for ${github_name} in the specified timeline`,
-                data: [] 
+                data: []
             });
         }
 
@@ -64,10 +64,10 @@ router.post('/refresh-prs', async (req, res) => {
             .select();
 
         if (upsertError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to save PRs to database',
-                error: upsertError.message 
+                error: upsertError.message
             });
         }
 
@@ -96,8 +96,8 @@ router.post('/refresh-prs', async (req, res) => {
         });
 
         // Return immediately without waiting for comments
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             message: `Successfully refreshed ${repoData?.length || 0} PR(s) for ${github_name}. Comments are being processed in the background.`,
             data: repoData,
             commentsProcessing: true
@@ -105,10 +105,10 @@ router.post('/refresh-prs', async (req, res) => {
 
     } catch (err) {
         console.error('Unexpected error in /refresh-prs:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'An unexpected error occurred while refreshing PRs',
-            error: err.message || 'Unknown error' 
+            error: err.message || 'Unknown error'
         });
     }
 })
@@ -124,9 +124,9 @@ router.get('/comments-status/:github_name', async (req, res) => {
             .single();
 
         if (userError || !user) {
-            return res.status(404).json({ 
-                success: false, 
-                message: `User '${github_name}' not found` 
+            return res.status(404).json({
+                success: false,
+                message: `User '${github_name}' not found`
             });
         }
 
@@ -154,10 +154,10 @@ router.get('/comments-status/:github_name', async (req, res) => {
 
     } catch (err) {
         console.error('Error checking comments status:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'Failed to check comments status',
-            error: err.message 
+            error: err.message
         });
     }
 });
@@ -167,9 +167,9 @@ router.post('/refresh-team-prs', async (req, res) => {
 
     // Input validation
     if (!team_id) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'team_id is required' 
+        return res.status(400).json({
+            success: false,
+            message: 'team_id is required'
         });
     }
 
@@ -182,10 +182,10 @@ router.post('/refresh-team-prs', async (req, res) => {
             .single();
 
         if (teamError || !team) {
-            return res.status(404).json({ 
-                success: false, 
+            return res.status(404).json({
+                success: false,
                 message: `Team with id '${team_id}' not found`,
-                error: teamError?.message 
+                error: teamError?.message
             });
         }
 
@@ -199,16 +199,16 @@ router.post('/refresh-team-prs', async (req, res) => {
             .eq('team_id', team_id);
 
         if (membersError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to fetch team members',
-                error: membersError.message 
+                error: membersError.message
             });
         }
 
         if (!teamMembers || teamMembers.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: `No members found in team '${team.name}'`,
                 data: {
                     team: team.name,
@@ -338,20 +338,20 @@ router.post('/refresh-team-prs', async (req, res) => {
             }
         }
 
-        const {data, error} = supabaseClient.from('teams')
-        .update({ last_sync: new Date().toISOString() })
-        .eq('id', team_id);
+        // Update team's last sync timestamp after all members are processed
+        const { error: teamSyncError } = await supabaseClient
+            .from('teams')
+            .update({ last_sync: new Date().toISOString() })
+            .eq('id', team_id);
 
-        if (error) {
-            console.error(`Failed to update last_sync for team ${team.name}:`, error);
+        if (teamSyncError) {
+            console.error(`Failed to update last_sync for team ${team.name}:`, teamSyncError);
+        } else {
+            console.log(`✓ Updated last_sync for team '${team.name}'`);
         }
 
-        if(data){
-            console.log(`Updated last_sync for team '${team.name}'`);
-        }
-
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             message: `Team '${team.name}' PR refresh completed. ${successCount} succeeded, ${failureCount} failed.`,
             data: {
                 team: team.name,
@@ -367,10 +367,10 @@ router.post('/refresh-team-prs', async (req, res) => {
 
     } catch (err) {
         console.error('Unexpected error in /refresh-team-prs:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'An unexpected error occurred while refreshing team PRs',
-            error: err.message || 'Unknown error' 
+            error: err.message || 'Unknown error'
         });
     }
 });
@@ -387,9 +387,9 @@ router.get('/team-status/:team_id', async (req, res) => {
             .single();
 
         if (teamError || !team) {
-            return res.status(404).json({ 
-                success: false, 
-                message: `Team with id '${team_id}' not found` 
+            return res.status(404).json({
+                success: false,
+                message: `Team with id '${team_id}' not found`
             });
         }
 
@@ -407,10 +407,10 @@ router.get('/team-status/:team_id', async (req, res) => {
             .eq('team_id', team_id);
 
         if (membersError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to fetch team members',
-                error: membersError.message 
+                error: membersError.message
             });
         }
 
@@ -455,10 +455,10 @@ router.get('/team-status/:team_id', async (req, res) => {
 
     } catch (err) {
         console.error('Error checking team status:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'Failed to check team status',
-            error: err.message 
+            error: err.message
         });
     }
 });
@@ -478,10 +478,10 @@ router.get('/user/:github_name', async (req, res) => {
             .single();
 
         if (userError || !user) {
-            return res.status(404).json({ 
-                success: false, 
+            return res.status(404).json({
+                success: false,
                 message: `User '${github_name}' not found`,
-                error: userError?.message 
+                error: userError?.message
             });
         }
 
@@ -546,16 +546,16 @@ router.get('/user/:github_name', async (req, res) => {
         const { data: prs, error: prError } = await prQuery;
 
         if (prError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to fetch PRs',
-                error: prError.message 
+                error: prError.message
             });
         }
 
         // Fetch comments for the user's PRs
         const prIds = prs.map(pr => pr.repo_id);
-        
+
         let comments = [];
         if (prIds.length > 0) {
             const { data: commentsData, error: commentsError } = await supabaseClient
@@ -607,10 +607,10 @@ router.get('/user/:github_name', async (req, res) => {
 
     } catch (err) {
         console.error('Error fetching user data:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'Failed to fetch user data',
-            error: err.message 
+            error: err.message
         });
     }
 });
@@ -629,10 +629,10 @@ router.get('/team/:team_id', async (req, res) => {
             .single();
 
         if (teamError || !team) {
-            return res.status(404).json({ 
-                success: false, 
+            return res.status(404).json({
+                success: false,
                 message: `Team with id '${team_id}' not found`,
-                error: teamError?.message 
+                error: teamError?.message
             });
         }
 
@@ -646,16 +646,16 @@ router.get('/team/:team_id', async (req, res) => {
             .eq('team_id', team_id);
 
         if (membersError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to fetch team members',
-                error: membersError.message 
+                error: membersError.message
             });
         }
 
         if (!teamMembers || teamMembers.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: `No members found in team '${team.name}'`,
                 team: {
                     id: team.id,
@@ -683,9 +683,9 @@ router.get('/team/:team_id', async (req, res) => {
             // Quarter-based timeline
             const q = parseInt(quarter);
             if (q < 1 || q > 4) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Quarter must be between 1 and 4' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Quarter must be between 1 and 4'
                 });
             }
 
@@ -708,8 +708,8 @@ router.get('/team/:team_id', async (req, res) => {
             .filter(id => id !== null && id !== undefined);
 
         if (githubIds.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: 'No valid github users found in team',
                 team: {
                     id: team.id,
@@ -734,16 +734,16 @@ router.get('/team/:team_id', async (req, res) => {
             .order('created_at', { ascending: false });
 
         if (prError) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Failed to fetch team PRs',
-                error: prError.message 
+                error: prError.message
             });
         }
 
         // Fetch comments for team PRs
         const prIds = prs?.map(pr => pr.repo_id) || [];
-        
+
         let comments = [];
         if (prIds.length > 0) {
             const { data: commentsData, error: commentsError } = await supabaseClient
@@ -853,19 +853,19 @@ router.get('/team/:team_id', async (req, res) => {
                 const avgCodeQuality = m.repos.length > 0
                     ? m.repos.reduce((sum, repo) => sum + (repo.code_quality || 0), 0) / m.repos.length
                     : 0;
-                
+
                 const avgLogicFunctionality = m.repos.length > 0
                     ? m.repos.reduce((sum, repo) => sum + (repo.logic_functionality || 0), 0) / m.repos.length
                     : 0;
-                
+
                 const avgPerformanceSecurity = m.repos.length > 0
                     ? m.repos.reduce((sum, repo) => sum + (repo.performance_security || 0), 0) / m.repos.length
                     : 0;
-                
+
                 const avgTestingDocumentation = m.repos.length > 0
                     ? m.repos.reduce((sum, repo) => sum + (repo.testing_documentation || 0), 0) / m.repos.length
                     : 0;
-                
+
                 const avgUiUx = m.repos.length > 0
                     ? m.repos.reduce((sum, repo) => sum + (repo.ui_ux || 0), 0) / m.repos.length
                     : 0;
@@ -878,10 +878,10 @@ router.get('/team/:team_id', async (req, res) => {
 
                 // Overall quality score (average of all quality metrics)
                 const overallQualityScore = (
-                    avgCodeQuality + 
-                    avgLogicFunctionality + 
-                    avgPerformanceSecurity + 
-                    avgTestingDocumentation + 
+                    avgCodeQuality +
+                    avgLogicFunctionality +
+                    avgPerformanceSecurity +
+                    avgTestingDocumentation +
                     avgUiUx
                 ) / 5;
 
@@ -935,7 +935,7 @@ router.get('/team/:team_id', async (req, res) => {
         // Top 3 performers overall
         const topPerformers = {
             overall: performersWithScores.slice(0, 3),
-            
+
             byPRs: [...memberBreakdown]
                 .filter(m => m.github_username !== 'unknown')
                 .sort((a, b) => b.totalPRs - a.totalPRs)
@@ -947,7 +947,7 @@ router.get('/team/:team_id', async (req, res) => {
                     count: m.totalPRs,
                     mergedPRs: m.mergedPRs
                 })),
-            
+
             byMergedPRs: [...memberBreakdown]
                 .filter(m => m.github_username !== 'unknown')
                 .sort((a, b) => b.mergedPRs - a.mergedPRs)
@@ -959,7 +959,7 @@ router.get('/team/:team_id', async (req, res) => {
                     count: m.mergedPRs,
                     totalPRs: m.totalPRs
                 })),
-            
+
             byComments: [...memberBreakdown]
                 .filter(m => m.github_username !== 'unknown')
                 .sort((a, b) => b.totalComments - a.totalComments)
@@ -971,7 +971,7 @@ router.get('/team/:team_id', async (req, res) => {
                     count: m.totalComments,
                     totalPRs: m.totalPRs
                 })),
-            
+
             byCodeQuality: performersWithScores
                 .sort((a, b) => b.metrics.qualityScores.overall - a.metrics.qualityScores.overall)
                 .slice(0, 3)
@@ -1006,13 +1006,310 @@ router.get('/team/:team_id', async (req, res) => {
 
     } catch (err) {
         console.error('Error fetching team data:', err);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'Failed to fetch team data',
-            error: err.message 
+            error: err.message
         });
     }
 });
+
+// GET Comment analysis
+router.get('/comment-analysis/:teamId', async (req, res) => {
+    const { teamId } = req.params;
+    const { compareTeamId, year } = req.query;
+
+    if (!compareTeamId) {
+        return res.status(400).json({
+            success: false,
+            message: 'compareTeamId query parameter is required'
+        });
+    }
+
+    try {
+        // Fetch primary team details
+        const { data: team, error: teamError } = await supabaseClient
+            .from('teams')
+            .select('*')
+            .eq('id', teamId)
+            .single();
+
+        if (teamError || !team) {
+            return res.status(404).json({
+                success: false,
+                message: `Team with id '${teamId}' not found`
+            });
+        }
+
+        // Fetch comparison team details
+        const { data: compareTeam, error: compareTeamError } = await supabaseClient
+            .from('teams')
+            .select('*')
+            .eq('id', compareTeamId)
+            .single();
+
+        if (compareTeamError || !compareTeam) {
+            return res.status(404).json({
+                success: false,
+                message: `Comparison team with id '${compareTeamId}' not found`
+            });
+        }
+
+        // Fetch all members from primary team
+        const { data: teamMembers, error: teamMembersError } = await supabaseClient
+            .from('team_members')
+            .select(`
+                *,
+                github_user:github_users(github_id, github_username)
+            `)
+            .eq('team_id', teamId);
+
+        if (teamMembersError) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to fetch team members',
+                error: teamMembersError.message
+            });
+        }
+
+        // Fetch all members from comparison team
+        const { data: compareTeamMembers, error: compareTeamMembersError } = await supabaseClient
+            .from('team_members')
+            .select(`
+                *,
+                github_user:github_users(github_id, github_username)
+            `)
+            .eq('team_id', compareTeamId);
+
+        if (compareTeamMembersError) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to fetch comparison team members',
+                error: compareTeamMembersError.message
+            });
+        }
+
+        // Create sets of github_ids and usernames for quick lookup
+        const teamGithubIds = new Set(
+            teamMembers
+                .map(m => m.github_user?.github_id)
+                .filter(id => id !== null && id !== undefined)
+        );
+
+        const compareTeamGithubIds = new Set(
+            compareTeamMembers
+                .map(m => m.github_user?.github_id)
+                .filter(id => id !== null && id !== undefined)
+        );
+
+        const teamUsernames = new Set(
+            teamMembers
+                .map(m => m.github_user?.github_username)
+                .filter(username => username !== null && username !== undefined)
+        );
+
+        console.log('teamUsernames', teamUsernames);
+
+        const compareTeamUsernames = new Set(
+            compareTeamMembers
+                .map(m => m.github_user?.github_username)
+                .filter(username => username !== null && username !== undefined)
+        );
+        console.log('compareTeamUsernames', compareTeamUsernames);
+
+        // Combine both teams' github_ids to fetch their PRs
+        const allGithubIds = [...teamGithubIds];
+
+        if (allGithubIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: 'No valid github users found in teams',
+                data: []
+            });
+        }
+
+        // Calculate year range (4 quarters = 1 year)
+        const targetYear = year ? parseInt(year) : new Date().getFullYear();
+        const analysisData = [];
+
+        // Analyze each quarter
+        for (let quarter = 1; quarter <= 4; quarter++) {
+            const quarterStartMonth = (quarter - 1) * 3;
+            const startDate = new Date(targetYear, quarterStartMonth, 1);
+            const endDate = new Date(targetYear, quarterStartMonth + 3, 0, 23, 59, 59, 999);
+
+            // Fetch PRs for selected team in this quarter
+            const { data: prs, error: prError } = await supabaseClient
+                .from('repos')
+                .select('repo_id, user_id')
+                .in('user_id', allGithubIds)
+                .gte('created_at', startDate.toISOString())
+                .lte('created_at', endDate.toISOString());
+
+            if (prError) {
+                console.error(`Error fetching PRs for Q${quarter}:`, prError);
+                continue;
+            }
+
+            if (!prs || prs.length === 0) {
+                analysisData.push({
+                    quarter: `${targetYear}-Q${quarter}`,
+                    totalPRs: 0,
+                    totalComments: 0,
+                    teamMemberComments: 0,
+                    compareTeamComments: 0,
+                    externalComments: 0,
+                    teamMemberPercent: 0,
+                    compareTeamPercent: 0,
+                    externalPercent: 0,
+                    startDate: startDate.toISOString().split('T')[0],
+                    endDate: endDate.toISOString().split('T')[0],
+                    topCommenters: {
+                        fromTeam: [],
+                        fromCompareTeam: [],
+                        external: []
+                    }
+                });
+                continue;
+            }
+
+            // Get PR IDs to fetch comments
+            const prIds = prs.map(pr => pr.repo_id);
+
+            // Fetch all comments for these PRs
+            const { data: comments, error: commentsError } = await supabaseClient
+                .from('comments')
+                .select('*')
+                .in('repo_id', prIds)
+                .gte('created_at', startDate.toISOString())
+                .lte('created_at', endDate.toISOString());
+
+            if (commentsError) {
+                console.error(`Error fetching comments for Q${quarter}:`, commentsError);
+                continue;
+            }
+
+            // Analyze comments
+            let teamMemberComments = 0;
+            let compareTeamComments = 0;
+            let externalComments = 0;
+
+            const teamCommenterCounts = {};
+            const compareTeamCommenterCounts = {};
+            const externalCommenterCounts = {};
+
+            if (comments && comments.length > 0) {
+                comments.forEach(comment => {
+                    const commentorId = comment.commentor_id;
+                    const commentorUsername = comment.commentor;
+
+                    // Check if commenter is from primary team
+                    if (teamGithubIds.has(commentorId) || teamUsernames.has(commentorUsername)) {
+                        teamMemberComments++;
+                        teamCommenterCounts[commentorUsername] = (teamCommenterCounts[commentorUsername] || 0) + 1;
+                    }
+                    // Check if commenter is from comparison team
+                    else if (compareTeamGithubIds.has(commentorId) || compareTeamUsernames.has(commentorUsername)) {
+                        compareTeamComments++;
+                        compareTeamCommenterCounts[commentorUsername] = (compareTeamCommenterCounts[commentorUsername] || 0) + 1;
+                    }
+                    // Otherwise, it's external
+                    else {
+                        externalComments++;
+                        externalCommenterCounts[commentorUsername || 'Unknown'] = (externalCommenterCounts[commentorUsername || 'Unknown'] || 0) + 1;
+                    }
+                });
+            }
+
+            const totalComments = comments?.length || 0;
+
+            // Calculate percentages
+            const teamMemberPercent = totalComments > 0 
+                ? parseFloat(((teamMemberComments / totalComments) * 100).toFixed(2)) 
+                : 0;
+            const compareTeamPercent = totalComments > 0 
+                ? parseFloat(((compareTeamComments / totalComments) * 100).toFixed(2)) 
+                : 0;
+            const externalPercent = totalComments > 0 
+                ? parseFloat(((externalComments / totalComments) * 100).toFixed(2)) 
+                : 0;
+
+            // Get top 3 commenters from each category
+            const getTopCommenters = (countsObj) => {
+                return Object.entries(countsObj)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([username, count]) => ({ username, count }));
+            };
+
+            analysisData.push({
+                quarter: `${targetYear}-Q${quarter}`,
+                totalPRs: prs.length,
+                totalComments,
+                teamMemberComments,
+                compareTeamComments,
+                externalComments,
+                teamMemberPercent,
+                compareTeamPercent,
+                externalPercent,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+                topCommenters: {
+                    fromTeam: getTopCommenters(teamCommenterCounts),
+                    fromCompareTeam: getTopCommenters(compareTeamCommenterCounts),
+                    external: getTopCommenters(externalCommenterCounts)
+                }
+            });
+        }
+
+        // Calculate year summary
+        const yearSummary = {
+            totalPRs: analysisData.reduce((sum, q) => sum + q.totalPRs, 0),
+            totalComments: analysisData.reduce((sum, q) => sum + q.totalComments, 0),
+            teamMemberComments: analysisData.reduce((sum, q) => sum + q.teamMemberComments, 0),
+            compareTeamComments: analysisData.reduce((sum, q) => sum + q.compareTeamComments, 0),
+            externalComments: analysisData.reduce((sum, q) => sum + q.externalComments, 0)
+        };
+
+        yearSummary.teamMemberPercent = yearSummary.totalComments > 0
+            ? parseFloat(((yearSummary.teamMemberComments / yearSummary.totalComments) * 100).toFixed(2))
+            : 0;
+        yearSummary.compareTeamPercent = yearSummary.totalComments > 0
+            ? parseFloat(((yearSummary.compareTeamComments / yearSummary.totalComments) * 100).toFixed(2))
+            : 0;
+        yearSummary.externalPercent = yearSummary.totalComments > 0
+            ? parseFloat(((yearSummary.externalComments / yearSummary.totalComments) * 100).toFixed(2))
+            : 0;
+
+        return res.status(200).json({
+            success: true,
+            teams: {
+                primary: {
+                    id: team.id,
+                    name: team.name,
+                    memberCount: teamMembers.length
+                },
+                comparison: {
+                    id: compareTeam.id,
+                    name: compareTeam.name,
+                    memberCount: compareTeamMembers.length
+                }
+            },
+            year: targetYear,
+            yearSummary,
+            quarterlyData: analysisData
+        });
+
+    } catch (err) {
+        console.error('Error in comment analysis:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to analyze comments',
+            error: err.message
+        });
+    }
+});
+
 
 
 module.exports = router;
