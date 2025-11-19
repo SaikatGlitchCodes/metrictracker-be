@@ -18,6 +18,8 @@ const getPrs = async (user) => {
             .toISOString()
             .split("T")[0];
 
+        console.log('sinceDate', sinceDate)
+
         while (true) {
             const res = await octokit.search.issuesAndPullRequests({
                 q: `author:${user.github_username} is:pr created:>=${sinceDate}`,

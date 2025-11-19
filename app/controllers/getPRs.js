@@ -346,6 +346,10 @@ router.post('/refresh-team-prs', async (req, res) => {
             console.error(`Failed to update last_sync for team ${team.name}:`, error);
         }
 
+        if(data){
+            console.log(`Updated last_sync for team '${team.name}'`);
+        }
+
         return res.status(200).json({ 
             success: true, 
             message: `Team '${team.name}' PR refresh completed. ${successCount} succeeded, ${failureCount} failed.`,
@@ -841,6 +845,145 @@ router.get('/team/:team_id', async (req, res) => {
             avgCommentsPerPR: prs.length > 0 ? (comments.length / prs.length).toFixed(2) : 0
         };
 
+        // Calculate top performers with comprehensive scoring
+        const performersWithScores = memberBreakdown
+            .filter(m => m.github_username !== 'unknown')
+            .map(m => {
+                // Calculate average scores across all quality metrics
+                const avgCodeQuality = m.repos.length > 0
+                    ? m.repos.reduce((sum, repo) => sum + (repo.code_quality || 0), 0) / m.repos.length
+                    : 0;
+                
+                const avgLogicFunctionality = m.repos.length > 0
+                    ? m.repos.reduce((sum, repo) => sum + (repo.logic_functionality || 0), 0) / m.repos.length
+                    : 0;
+                
+                const avgPerformanceSecurity = m.repos.length > 0
+                    ? m.repos.reduce((sum, repo) => sum + (repo.performance_security || 0), 0) / m.repos.length
+                    : 0;
+                
+                const avgTestingDocumentation = m.repos.length > 0
+                    ? m.repos.reduce((sum, repo) => sum + (repo.testing_documentation || 0), 0) / m.repos.length
+                    : 0;
+                
+                const avgUiUx = m.repos.length > 0
+                    ? m.repos.reduce((sum, repo) => sum + (repo.ui_ux || 0), 0) / m.repos.length
+                    : 0;
+
+                // Calculate merge rate (percentage of PRs that got merged)
+                const mergeRate = m.totalPRs > 0 ? (m.mergedPRs / m.totalPRs) * 100 : 0;
+
+                // Calculate engagement score (comments per PR)
+                const engagementScore = m.totalPRs > 0 ? m.totalComments / m.totalPRs : 0;
+
+                // Overall quality score (average of all quality metrics)
+                const overallQualityScore = (
+                    avgCodeQuality + 
+                    avgLogicFunctionality + 
+                    avgPerformanceSecurity + 
+                    avgTestingDocumentation + 
+                    avgUiUx
+                ) / 5;
+
+                // Comprehensive performance score with weighted factors:
+                // - Total PRs (20%): Productivity
+                // - Merged PRs (25%): Success rate
+                // - Merge Rate (20%): Efficiency
+                // - Overall Quality Score (25%): Code quality
+                // - Engagement Score (10%): Collaboration
+                const maxPRs = Math.max(...memberBreakdown.map(m => m.totalPRs));
+                const maxMergedPRs = Math.max(...memberBreakdown.map(m => m.mergedPRs));
+                const maxComments = Math.max(...memberBreakdown.map(m => m.totalComments));
+
+                const normalizedPRs = maxPRs > 0 ? (m.totalPRs / maxPRs) * 100 : 0;
+                const normalizedMergedPRs = maxMergedPRs > 0 ? (m.mergedPRs / maxMergedPRs) * 100 : 0;
+                const normalizedQuality = (overallQualityScore / 5) * 100;
+                const normalizedEngagement = maxComments > 0 ? (m.totalComments / maxComments) * 100 : 0;
+
+                const performanceScore = (
+                    (normalizedPRs * 0.20) +           // 20% weight for total PRs
+                    (normalizedMergedPRs * 0.25) +     // 25% weight for merged PRs
+                    (mergeRate * 0.20) +               // 20% weight for merge rate
+                    (normalizedQuality * 0.25) +       // 25% weight for quality
+                    (normalizedEngagement * 0.10)      // 10% weight for engagement
+                );
+
+                return {
+                    github_username: m.github_username,
+                    display_name: m.display_name,
+                    avatar_url: m.avatar_url,
+                    performanceScore: parseFloat(performanceScore.toFixed(2)),
+                    metrics: {
+                        totalPRs: m.totalPRs,
+                        mergedPRs: m.mergedPRs,
+                        mergeRate: parseFloat(mergeRate.toFixed(2)),
+                        totalComments: m.totalComments,
+                        engagementScore: parseFloat(engagementScore.toFixed(2)),
+                        qualityScores: {
+                            codeQuality: parseFloat(avgCodeQuality.toFixed(2)),
+                            logicFunctionality: parseFloat(avgLogicFunctionality.toFixed(2)),
+                            performanceSecurity: parseFloat(avgPerformanceSecurity.toFixed(2)),
+                            testingDocumentation: parseFloat(avgTestingDocumentation.toFixed(2)),
+                            uiUx: parseFloat(avgUiUx.toFixed(2)),
+                            overall: parseFloat(overallQualityScore.toFixed(2))
+                        }
+                    }
+                };
+            })
+            .sort((a, b) => b.performanceScore - a.performanceScore);
+
+        // Top 3 performers overall
+        const topPerformers = {
+            overall: performersWithScores.slice(0, 3),
+            
+            byPRs: [...memberBreakdown]
+                .filter(m => m.github_username !== 'unknown')
+                .sort((a, b) => b.totalPRs - a.totalPRs)
+                .slice(0, 3)
+                .map(m => ({
+                    github_username: m.github_username,
+                    display_name: m.display_name,
+                    avatar_url: m.avatar_url,
+                    count: m.totalPRs,
+                    mergedPRs: m.mergedPRs
+                })),
+            
+            byMergedPRs: [...memberBreakdown]
+                .filter(m => m.github_username !== 'unknown')
+                .sort((a, b) => b.mergedPRs - a.mergedPRs)
+                .slice(0, 3)
+                .map(m => ({
+                    github_username: m.github_username,
+                    display_name: m.display_name,
+                    avatar_url: m.avatar_url,
+                    count: m.mergedPRs,
+                    totalPRs: m.totalPRs
+                })),
+            
+            byComments: [...memberBreakdown]
+                .filter(m => m.github_username !== 'unknown')
+                .sort((a, b) => b.totalComments - a.totalComments)
+                .slice(0, 3)
+                .map(m => ({
+                    github_username: m.github_username,
+                    display_name: m.display_name,
+                    avatar_url: m.avatar_url,
+                    count: m.totalComments,
+                    totalPRs: m.totalPRs
+                })),
+            
+            byCodeQuality: performersWithScores
+                .sort((a, b) => b.metrics.qualityScores.overall - a.metrics.qualityScores.overall)
+                .slice(0, 3)
+                .map(m => ({
+                    github_username: m.github_username,
+                    display_name: m.display_name,
+                    avatar_url: m.avatar_url,
+                    avgScore: m.metrics.qualityScores.overall,
+                    totalPRs: m.metrics.totalPRs
+                }))
+        };
+
         return res.status(200).json({
             success: true,
             team: {
@@ -855,6 +998,7 @@ router.get('/team/:team_id', async (req, res) => {
                 year: targetYear
             },
             stats,
+            topPerformers,
             data: {
                 memberBreakdown
             }
