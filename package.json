@@ -2,10 +2,13 @@
   "name": "metrictracker-backend",
   "version": "1.0.0",
   "description": "Backend service for MetricTracker - GitHub team metrics and PR analytics",
-  "main": "src/server.js",
+  "main": "app/index.js",
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node app/index.js",
+    "dev": "nodemon app/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
