@@ -1,4 +1,3 @@
-const supabaseClient = require('../database/connectionDB');
 const octokit = require('./Oktokit');
 
 const parseRepoFromUrl = (url) => {

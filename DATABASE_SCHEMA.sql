@@ -36,7 +36,7 @@ CREATE TABLE public.repos (
   comments_url text,
   number integer,
   state text,
-  label ARRAY,
+  label text[],
   total_comments integer,
   created_at timestamp without time zone,
   merged_at timestamp without time zone,
@@ -66,5 +66,6 @@ CREATE TABLE public.teams (
   description text,
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  last_sync timestamp with time zone,
   CONSTRAINT teams_pkey PRIMARY KEY (id)
 );

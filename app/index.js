@@ -5,7 +5,7 @@ const cors = require('cors');
 dotenv.config();
 
 // Environment validation
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_KEY', 'GITHUB_TOKEN', 'BASE_URL'];
+const requiredEnvVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'GITHUB_TOKEN', 'BASE_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -15,7 +15,8 @@ if (missingEnvVars.length > 0) {
 }
 
 const PORT = process.env.PORT || 4000;
-const supabaseClient = require('./database/connectionDB');
+const { sequelize } = require('./database/sequelize');
+const { GithubUser } = require('./models');
 
 // CORS Configuration
 const corsOptions = {
@@ -56,21 +57,15 @@ app.get('/health', async (req, res) => {
     };
 
     try {
-        // Test Supabase connection with a simple query
-        const { data, error } = await supabaseClient
-            .from('github_users')
-            .select('id')
-            .limit(1);
+        // Test PostgreSQL connection with a simple query
+        await sequelize.authenticate();
+        const startTime = Date.now();
+        await GithubUser.findOne({ attributes: ['id'], limit: 1 });
+        const latency = Date.now() - startTime;
 
-        if (error) {
-            healthCheck.database.status = 'error';
-            healthCheck.database.message = error.message;
-            healthCheck.status = 'degraded';
-            return res.status(503).json(healthCheck);
-        }
-
-        healthCheck.database.status = 'ok';
-        healthCheck.database.message = 'Connected';
+        healthCheck.database.status = 'connected';
+        healthCheck.database.message = 'PostgreSQL connected';
+        healthCheck.database.latency_ms = latency;
         return res.status(200).json(healthCheck);
 
     } catch (err) {
@@ -105,37 +100,58 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
-        process.exit(0);
-    });
-});
+// Start server with database sync
+const startServer = async () => {
+    try {
+        
+        // Sync models (don't use force: true in production)
+        // if (process.env.NODE_ENV !== 'production') {
+        //     await sequelize.sync({ alter: false });
+        //     console.log('📊 Database models synced');
+        // }
+        
+        const server = app.listen(PORT, () => {
+            console.log('🚀 MetricTracker Backend Server');
+            console.log(`📡 Server running on port ${PORT}`);
+            console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🔗 Base URL: ${process.env.BASE_URL}`);
+            console.log(`✅ Health check: http://localhost:${PORT}/health`);
+            console.log(`📚 API Routes:`);
+            console.log(`   - POST /prs/refresh-prs`);
+            console.log(`   - POST /prs/refresh-team-prs`);
+            console.log(`   - GET  /prs/user/:github_name`);
+            console.log(`   - GET  /prs/team/:team_id`);
+            console.log(`   - GET  /teams`);
+            console.log(`   - POST /teams/add`);
+        });
+        
+        // Update graceful shutdown handlers
+        process.on('SIGTERM', async () => {
+            console.log('SIGTERM signal received: closing HTTP server');
+            server.close(async () => {
+                console.log('HTTP server closed');
+                await sequelize.close();
+                console.log('Database connection closed');
+                process.exit(0);
+            });
+        });
 
-process.on('SIGINT', () => {
-    console.log('SIGINT signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
-        process.exit(0);
-    });
-});
+        process.on('SIGINT', async () => {
+            console.log('SIGINT signal received: closing HTTP server');
+            server.close(async () => {
+                console.log('HTTP server closed');
+                await sequelize.close();
+                console.log('Database connection closed');
+                process.exit(0);
+            });
+        });
+        
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+};
 
-// Start server
-const server = app.listen(PORT, () => {
-    console.log('🚀 MetricTracker Backend Server');
-    console.log(`📡 Server running on port ${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Base URL: ${process.env.BASE_URL}`);
-    console.log(`✅ Health check: http://localhost:${PORT}/health`);
-    console.log(`📚 API Routes:`);
-    console.log(`   - POST /prs/refresh-prs`);
-    console.log(`   - POST /prs/refresh-team-prs`);
-    console.log(`   - GET  /prs/user/:github_name`);
-    console.log(`   - GET  /prs/team/:team_id`);
-    console.log(`   - GET  /teams`);
-    console.log(`   - POST /teams/add`);
-});
+startServer();
 
 module.exports = app;

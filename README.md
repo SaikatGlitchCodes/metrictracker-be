@@ -17,7 +17,7 @@ Backend service for MetricTracker - A comprehensive GitHub team metrics and PR a
 
 - Node.js >= 16.0.0
 - npm or yarn
-- Supabase account with PostgreSQL database
+- PostgreSQL database (GCP Cloud SQL or any PostgreSQL 12+)
 - GitHub Personal Access Token with repo and read:org permissions
 
 ## Installation
@@ -40,25 +40,32 @@ cp .env.example .env
 
 4. Configure environment variables in `.env`:
 ```env
-# Supabase Configuration
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_KEY=your_supabase_anon_key
+# PostgreSQL Configuration (GCP)
+DB_HOST=your_postgresql_host
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_database_password
+DB_NAME=postgres
+DB_SSL=true
 
 # GitHub API
 GITHUB_TOKEN=your_github_personal_access_token
+BASE_URL=https://api.github.com
 
 # Server Configuration
-BASE_URL=http://localhost:4000
 PORT=4000
 NODE_ENV=development
 
 # Optional: Gemini AI Integration
 GEMINI_URL=your_gemini_api_url
+
+# CORS Configuration (Production)
+# ALLOWED_ORIGINS=https://yourfrontend.com
 ```
 
 ## Database Schema
 
-Ensure your Supabase database has the following tables:
+Ensure your PostgreSQL database has the following tables:
 
 ### `github_users`
 - `id` (uuid, primary key)

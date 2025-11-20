@@ -1,4 +1,10 @@
-const supabase = require('@supabase/supabase-js');
-const supabaseClient = supabase.createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+// This file is kept for backwards compatibility
+// All database operations should now use Sequelize models
+const { sequelize } = require('./sequelize');
+const models = require('../models');
 
-module.exports = supabaseClient;
+// Export for legacy code that still imports this file
+module.exports = {
+    sequelize,
+    ...models
+};

@@ -27,6 +27,8 @@ const getPrs = async (user) => {
                 page,
             });
 
+            console.log(res.data.items.length)
+
             repos = repos.concat(
                 res.data.items.map(repo => ({
                     title: repo.title,
@@ -36,7 +38,7 @@ const getPrs = async (user) => {
                     number: repo.number,
                     state: repo.state,
                     user_id: user.github_id,
-                    label: repo.labels,
+                    label: null,
                     total_comments: repo.comments,
                     created_at: repo.created_at,
                     closed_at: repo.closed_at,

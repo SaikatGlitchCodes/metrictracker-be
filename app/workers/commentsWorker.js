@@ -1,14 +1,49 @@
 const { parentPort, workerData } = require('worker_threads');
 const fetchComments = require('../utils/fetchComments');
-const { createClient } = require('@supabase/supabase-js');
-
+const { Sequelize } = require('sequelize');
 
 async function processComments() {
-    const { prData, supabaseUrl, supabaseKey, github_name, github_id } = workerData;
+    const { prData, dbConfig, github_name, github_id } = workerData;
+
+    // Initialize Sequelize in worker thread
+    const sequelize = new Sequelize(
+        dbConfig.database,
+        dbConfig.user,
+        dbConfig.password,
+        {
+            host: dbConfig.host,
+            port: dbConfig.port,
+            dialect: 'postgres',
+            dialectOptions: {
+                ssl: {
+                    require: true,
+                    rejectUnauthorized: false
+                }
+            },
+            logging: false
+        }
+    );
+
+    // Define models in worker context
+    const Comment = sequelize.define('Comment', {
+        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+        type: { type: Sequelize.TEXT },
+        body: { type: Sequelize.TEXT },
+        created_at: { type: Sequelize.DATE },
+        commentor: { type: Sequelize.TEXT },
+        commentor_id: { type: Sequelize.INTEGER },
+        repo_id: { type: Sequelize.INTEGER, allowNull: false }
+    }, { tableName: 'comments', timestamps: false });
+
+    const GithubUser = sequelize.define('GithubUser', {
+        id: { type: Sequelize.UUID, primaryKey: true },
+        github_username: { type: Sequelize.STRING },
+        github_id: { type: Sequelize.INTEGER },
+        comments_last_sync: { type: Sequelize.DATE }
+    }, { tableName: 'github_users', timestamps: false });
 
     try {
-        // Initialize Supabase client in worker thread
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        await sequelize.authenticate();
 
         // Send progress update
         parentPort.postMessage({ 
@@ -36,13 +71,9 @@ async function processComments() {
                 message: `Saving ${issueComments.length} issue comments` 
             });
 
-            const { error: issueCommentError } = await supabase
-                .from('comments')
-                .upsert(issueComments);
-
-            if (issueCommentError) {
-                throw new Error(`Failed to save issue comments: ${issueCommentError.message}`);
-            }
+            await Comment.bulkCreate(issueComments, {
+                updateOnDuplicate: ['body', 'commentor', 'commentor_id', 'type', 'created_at']
+            });
         }
 
         // Save review comments
@@ -52,24 +83,16 @@ async function processComments() {
                 message: `Saving ${reviewComments.length} review comments` 
             });
 
-            const { error: reviewCommentError } = await supabase
-                .from('comments')
-                .upsert(reviewComments);
-
-            if (reviewCommentError) {
-                throw new Error(`Failed to save review comments: ${reviewCommentError.message}`);
-            }
+            await Comment.bulkCreate(reviewComments, {
+                updateOnDuplicate: ['body', 'commentor', 'commentor_id', 'type', 'created_at']
+            });
         }
 
         // Update comments sync timestamp
-        const { error: commentsSyncError } = await supabase
-            .from('github_users')
-            .update({ comments_last_sync: new Date().toISOString() })
-            .eq('github_id', github_id);
-
-        if (commentsSyncError) {
-            console.error('Failed to update comments_last_sync:', commentsSyncError);
-        }
+        await GithubUser.update(
+            { comments_last_sync: new Date() },
+            { where: { github_id } }
+        );
 
         // Send success message
         parentPort.postMessage({ 
@@ -89,6 +112,8 @@ async function processComments() {
             message: error.message || 'Unknown error in worker thread',
             error: error.stack 
         });
+    } finally {
+        await sequelize.close();
     }
 }
 
