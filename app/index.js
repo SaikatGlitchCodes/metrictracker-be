@@ -83,6 +83,7 @@ app.get('/health', async (req, res) => {
 
 app.use('/teams', require('./controllers/getTeams'));
 app.use('/prs', require('./controllers/getPRs'));
+app.use('/ai', require('./controllers/getAI'));
 
 // 404 Handler
 app.use((req, res) => {
@@ -136,6 +137,9 @@ const server = app.listen(PORT, () => {
     console.log(`   - GET  /prs/team/:team_id`);
     console.log(`   - GET  /teams`);
     console.log(`   - POST /teams/add`);
+    console.log(`   - POST /ai/analyze-repo`);
+    console.log(`   - POST /ai/analyze-batch`);
+    console.log(`   - GET  /ai/repo-scores/:repo_id`);
 });
 
 module.exports = app;
